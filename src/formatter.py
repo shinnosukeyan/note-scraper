@@ -23,7 +23,7 @@ class ContentFormatter:
         if article_body:
             content_parts = self._process_content_elements(article_body)
         
-        # 改行を「→」で結合
+        # 改行で結合（普通の改行）
         return '\n'.join(content_parts)
     
     def _process_content_elements(self, element) -> List[str]:
@@ -41,21 +41,21 @@ class ContentFormatter:
                 p_content = self._process_paragraph(child)
                 if p_content:
                     parts.append(p_content)
-                    parts.append('→')  # 改行
+                    parts.append('')  # 空行
             
             elif child.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
                 # 見出し
                 heading_text = child.get_text(strip=True)
                 if heading_text:
                     parts.append(f"**{heading_text}**")
-                    parts.append('→')
+                    parts.append('')
             
             elif child.name == 'blockquote':
                 # 引用
                 quote_text = child.get_text(strip=True)
                 if quote_text:
                     parts.append(f"> {quote_text}")
-                    parts.append('→')
+                    parts.append('')
             
             elif child.name == 'hr':
                 # 区切り線
@@ -68,7 +68,7 @@ class ContentFormatter:
                 img_alt = child.get('alt', '画像')
                 if img_src:
                     parts.append(f"![{img_alt}]({img_src})")
-                    parts.append('→')
+                    parts.append('')
             
             elif child.name == 'figure':
                 # 図表（画像含む）または埋め込みバナー
@@ -81,7 +81,7 @@ class ContentFormatter:
                         banner_content = self._process_embed_content(embed_container)
                         if banner_content:
                             parts.append(banner_content)
-                            parts.append('→')
+                            parts.append('')
                             continue
                 
                 # 通常の画像処理
@@ -96,21 +96,21 @@ class ContentFormatter:
                         if figcaption:
                             caption_text = figcaption.get_text(strip=True)
                             parts.append(f"*{caption_text}*")
-                        parts.append('→')
+                        parts.append('')
             
             elif child.name == 'div':
                 # 埋め込みコンテンツ・バナー
                 embed_content = self._process_embed_content(child)
                 if embed_content:
                     parts.append(embed_content)
-                    parts.append('→')
+                    parts.append('')
             
             elif child.name == 'a':
                 # 直接のリンク・バナー
                 link_content = self._process_link_banner(child)
                 if link_content:
                     parts.append(link_content)
-                    parts.append('→')
+                    parts.append('')
             
             elif child.name == 'ul' or child.name == 'ol':
                 # リスト
@@ -157,7 +157,7 @@ class ContentFormatter:
             
             elif child.name == 'br':
                 # 改行
-                text_parts.append('→')
+                text_parts.append('')
             
             else:
                 # その他の要素
