@@ -86,10 +86,17 @@ class ContentFormatter:
                         parts.append('→')
             
             elif child.name == 'div':
-                # 埋め込みコンテンツ
+                # 埋め込みコンテンツ・バナー
                 embed_content = self._process_embed_content(child)
                 if embed_content:
                     parts.append(embed_content)
+                    parts.append('→')
+            
+            elif child.name == 'a':
+                # 直接のリンク・バナー
+                link_content = self._process_link_banner(child)
+                if link_content:
+                    parts.append(link_content)
                     parts.append('→')
             
             elif child.name == 'ul' or child.name == 'ol':
@@ -148,20 +155,128 @@ class ContentFormatter:
         return ''.join(text_parts)
     
     def _process_embed_content(self, div_element) -> str:
-        """埋め込みコンテンツを処理"""
-        # 埋め込みコンテンツの特定パターンを検出
+        """埋め込みコンテンツ・バナーを処理"""
+        # 複数のパターンでバナー・埋め込みを検出
+        
+        # パターン1: リンク付きdiv
         embed_link = div_element.find('a')
         if embed_link:
-            href = embed_link.get('href', '')
-            title_elem = embed_link.find('h3') or embed_link.find('h2') or embed_link.find('strong')
-            desc_elem = embed_link.find('p')
+            return self._extract_banner_info(embed_link)
+        
+        # パターン2: iframe埋め込み（YouTube、Twitter等）
+        iframe = div_element.find('iframe')
+        if iframe:
+            iframe_src = iframe.get('src', '')
+            if iframe_src:
+                if 'youtube.com' in iframe_src or 'youtu.be' in iframe_src:
+                    return f"[YouTube埋め込み]({iframe_src})"
+                elif 'twitter.com' in iframe_src or 'x.com' in iframe_src:
+                    return f"[Twitter埋め込み]({iframe_src})"
+                else:
+                    return f"[埋め込みコンテンツ]({iframe_src})"
+        
+        # パターン3: data属性付きdiv（特殊埋め込み）
+        if div_element.get('data-href') or div_element.get('data-url'):
+            data_url = div_element.get('data-href') or div_element.get('data-url')
+            text_content = div_element.get_text(strip=True)
+            if text_content:
+                return f"[バナー: {text_content}]({data_url})"
+            else:
+                return f"[埋め込みリンク]({data_url})"
+        
+        # パターン4: 画像付きdiv（バナーの可能性）
+        img = div_element.find('img')
+        if img:
+            img_src = img.get('src', '')
+            img_alt = img.get('alt', '')
+            text_content = div_element.get_text(strip=True)
             
-            if href and title_elem:
-                title = title_elem.get_text(strip=True)
-                desc = desc_elem.get_text(strip=True) if desc_elem else ''
-                domain = urlparse(href).netloc
-                
-                # 完成データ形式の埋め込み
-                return f"[埋め込みコンテンツ: [**{title}***{desc}**{domain}*]({href})[{href}]({href})]({href})"
+            # 周辺にリンクがある場合
+            parent_link = div_element.find_parent('a')
+            if parent_link:
+                link_href = parent_link.get('href', '')
+                if link_href:
+                    if text_content:
+                        return f"[バナー: {text_content}]({link_href})"
+                    elif img_alt:
+                        return f"[画像バナー: {img_alt}]({link_href})"
+                    else:
+                        return f"[画像バナー]({link_href})"
+            
+            # 画像のみの場合
+            if img_src:
+                if text_content:
+                    return f"[画像: {text_content}]({img_src})"
+                elif img_alt:
+                    return f"[画像: {img_alt}]({img_src})"
+                else:
+                    return f"[画像]({img_src})"
         
         return ''
+    
+    def _process_link_banner(self, a_element) -> str:
+        """直接のリンク・バナーを処理"""
+        return self._extract_banner_info(a_element)
+    
+    def _extract_banner_info(self, link_element) -> str:
+        """リンク要素からバナー情報を抽出"""
+        href = link_element.get('href', '')
+        if not href:
+            return ''
+        
+        # タイトル取得（優先順位順）
+        title_elem = (link_element.find('h3') or 
+                     link_element.find('h2') or 
+                     link_element.find('h1') or
+                     link_element.find('strong') or
+                     link_element.find('b') or
+                     link_element.find('span', class_=lambda x: x and 'title' in str(x).lower()))
+        
+        # 説明文取得
+        desc_elem = (link_element.find('p') or 
+                    link_element.find('div', class_=lambda x: x and any(word in str(x).lower() for word in ['desc', 'summary', 'text'])))
+        
+        # 画像取得
+        img_elem = link_element.find('img')
+        
+        # 情報を組み立て
+        title = title_elem.get_text(strip=True) if title_elem else ''
+        desc = desc_elem.get_text(strip=True) if desc_elem else ''
+        img_alt = img_elem.get('alt', '') if img_elem else ''
+        img_src = img_elem.get('src', '') if img_elem else ''
+        
+        # ドメイン取得
+        domain = urlparse(href).netloc
+        
+        # バナータイプを判定
+        if img_elem and (title or img_alt):
+            # 画像付きバナー
+            banner_title = title or img_alt
+            if desc:
+                return f"[画像バナー: {banner_title} - {desc}]({href})"
+            else:
+                return f"[画像バナー: {banner_title}]({href})"
+        
+        elif title and desc:
+            # 完全なバナー情報
+            return f"[バナー: {title} - {desc}]({href})"
+        
+        elif title:
+            # タイトルのみ
+            return f"[バナー: {title}]({href})"
+        
+        elif img_alt:
+            # 画像のみ
+            return f"[画像バナー: {img_alt}]({href})"
+        
+        elif domain:
+            # ドメインのみ
+            full_text = link_element.get_text(strip=True)
+            if full_text and len(full_text) < 100:  # 短いテキストの場合
+                return f"[リンク: {full_text}]({href})"
+            else:
+                return f"[リンク: {domain}]({href})"
+        
+        else:
+            # 最低限の情報
+            return f"[リンク]({href})"

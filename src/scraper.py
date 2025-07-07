@@ -40,6 +40,39 @@ class NoteScraper:
             article_urls = await self.collector.collect_article_links(self.browser_manager.page)
             print(f"✅ {len(article_urls)} 記事を発見")
             
+            # デバッグ: 記事数が少ない場合の詳細情報
+            if len(article_urls) < 30:
+                print(f"⚠️  記事数が少ないです ({len(article_urls)}記事)")
+                print("🔍 ページ内の全リンクを調査中...")
+                
+                # 全リンクをデバッグ
+                all_page_links = await self.browser_manager.page.query_selector_all('a')
+                note_links = []
+                for link in all_page_links:
+                    try:
+                        href = await link.get_attribute('href')
+                        if href and '/n/' in href:
+                            note_links.append(href)
+                    except:
+                        continue
+                        
+                print(f"🔍 ページ内の/n/リンク総数: {len(note_links)}")
+                print(f"🔍 最初の10個: {note_links[:10]}")
+                
+                # スクロール状況確認
+                scroll_height = await self.browser_manager.page.evaluate('document.body.scrollHeight')
+                print(f"🔍 ページの高さ: {scroll_height}px")
+                
+                # もっとみるボタンの存在確認
+                more_buttons = await self.browser_manager.page.query_selector_all('button')
+                for button in more_buttons:
+                    try:
+                        text = await button.text_content()
+                        if text and 'もっと' in text:
+                            print(f"🔍 発見したボタン: '{text}'")
+                    except:
+                        continue
+            
             if not article_urls:
                 print("❌ 記事が見つかりませんでした")
                 return {'success': False, 'error': 'No articles found'}
@@ -133,6 +166,14 @@ class NoteScraper:
                 # 本文とメタデータ取得
                 formatted_content = self.formatter.extract_formatted_content(soup)
                 metadata = self.collector.extract_article_metadata(soup)
+                
+                # デバッグ: バナー検出状況
+                if '[バナー:' in formatted_content or '[画像バナー:' in formatted_content:
+                    print(f"🔍 バナー検出: {url}")
+                
+                # デバッグ: 埋め込み検出状況  
+                if '[埋め込み' in formatted_content or '[YouTube' in formatted_content or '[Twitter' in formatted_content:
+                    print(f"🔍 埋め込み検出: {url}")
                 
                 # 記事情報を作成
                 article = {
