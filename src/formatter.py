@@ -158,7 +158,38 @@ class ContentFormatter:
         """埋め込みコンテンツ・バナーを処理"""
         # 複数のパターンでバナー・埋め込みを検出
         
-        # パターン1: リンク付きdiv
+        # パターン1: Noteの外部記事ウィジェット（バナー）
+        classes = div_element.get('class', [])
+        if isinstance(classes, list) and 'external-article-widget' in classes:
+            embed_link = div_element.find('a')
+            if embed_link:
+                return self._extract_banner_info(embed_link)
+        elif isinstance(classes, str) and 'external-article-widget' in classes:
+            embed_link = div_element.find('a')
+            if embed_link:
+                return self._extract_banner_info(embed_link)
+        
+        # パターン2: embedContainer（埋め込み全般）
+        if div_element.get('data-name') == 'embedContainer':
+            # 中身を再帰的に処理
+            inner_divs = div_element.find_all('div')
+            for inner_div in inner_divs:
+                result = self._process_embed_content(inner_div)
+                if result:
+                    return result
+        
+        # パターン3: data-embed-service属性（サービス埋め込み）
+        if div_element.get('data-embed-service'):
+            service = div_element.get('data-embed-service')
+            embed_link = div_element.find('a')
+            if embed_link:
+                banner_info = self._extract_banner_info(embed_link)
+                if service == 'external-article':
+                    return banner_info
+                else:
+                    return f"[{service}埋め込み: {banner_info}]"
+        
+        # パターン4: リンク付きdiv（一般）
         embed_link = div_element.find('a')
         if embed_link:
             return self._extract_banner_info(embed_link)
