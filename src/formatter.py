@@ -71,7 +71,20 @@ class ContentFormatter:
                     parts.append('→')
             
             elif child.name == 'figure':
-                # 図表（画像含む）
+                # 図表（画像含む）または埋め込みバナー
+                
+                # まずバナー・埋め込みをチェック
+                if child.get('embedded-service') == 'external-article':
+                    # Noteの外部記事埋め込み（バナー）
+                    embed_container = child.find('div', attrs={'data-name': 'embedContainer'})
+                    if embed_container:
+                        banner_content = self._process_embed_content(embed_container)
+                        if banner_content:
+                            parts.append(banner_content)
+                            parts.append('→')
+                            continue
+                
+                # 通常の画像処理
                 img = child.find('img')
                 figcaption = child.find('figcaption')
                 
