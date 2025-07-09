@@ -15,8 +15,21 @@ class BrowserManager:
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         
+    def _show_manual_instructions(self):
+        """手動作業の指示を表示"""
+        print("\n" + "=" * 70)
+        print("🚨 MANDATORY INSTRUCTIONS - 必須手順")
+        print("=" * 70)
+        print("## 📋 テスト手順")
+        print("1. **ログインしてください**")
+        print("2. **記事が表示されるまで待機**")
+        print("=" * 70)
+        print()
+    
     async def initialize(self):
         """ブラウザを初期化（タイムアウト無効化）"""
+        # 必須指示を表示
+        self._show_manual_instructions()
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(
             headless=self.headless,

@@ -23,7 +23,7 @@ class NoteScraper:
         self.formatter = ContentFormatter()
         self.exporter = CSVExporter()
         
-    async def run(self, profile_url: str) -> Dict[str, any]:
+    async def run(self, profile_url: str, limit: int = None, manual_login: bool = False) -> Dict[str, any]:
         """メイン処理"""
         try:
             print("🚀 Note Scraper を開始")
@@ -33,12 +33,22 @@ class NoteScraper:
             await self.browser_manager.initialize()
             print("✅ ブラウザ初期化完了")
             
-            # 手動準備フェーズ
-            await self._manual_setup_phase(profile_url)
+            # 手動準備フェーズ（manual_loginフラグが有効な場合のみ）
+            if manual_login:
+                await self._manual_setup_phase(profile_url)
+            else:
+                # 記事一覧ページに移動のみ
+                article_list_url = await self.browser_manager.navigate_to_article_list(profile_url)
+                print(f"📄 記事一覧に移動: {article_list_url}")
             
             # 記事収集
             article_urls = await self.collector.collect_article_links(self.browser_manager.page)
             print(f"✅ {len(article_urls)} 記事を発見")
+            
+            # 記事数制限適用
+            if limit and len(article_urls) > limit:
+                article_urls = article_urls[:limit]
+                print(f"⚡ 記事数を {limit} 記事に制限")
             
             # デバッグ: 記事数が少ない場合の詳細情報
             if len(article_urls) < 30:
@@ -82,7 +92,11 @@ class NoteScraper:
             
             # CSV保存
             timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-            filename = f"ihayato_final_{timestamp}.csv"
+            filename = f"output/ihayato_final_{timestamp}.csv"
+            
+            # outputフォルダ作成（存在しない場合）
+            os.makedirs("output", exist_ok=True)
+            
             result = self.exporter.save_to_csv(articles, filename)
             
             print(f"🎉 スクレイピング完了!")
@@ -125,21 +139,40 @@ class NoteScraper:
         print("   - 時間をかけても大丈夫です")
         print()
         
-        # 完了まで待機
+        # 完了まで待機（まず既存ファイルを削除）
         setup_file = "/Users/yusukeohata/Desktop/development/note-scraper/setup_done.txt"
+        
+        # 既存のファイルがあれば削除
+        if os.path.exists(setup_file):
+            os.remove(setup_file)
+            print("🗑️  前回のsetup_done.txtファイルを削除しました")
+        
         print("👆 完了したら、以下のコマンドを実行してください:")
         print(f"   touch {setup_file}")
         print()
         print("⏰ setup_done.txt ファイルの作成を待機中...")
+        print("   ※ このメッセージが表示されている間は、ファイルスクレイピングは開始されません")
         
+        # より確実な監視ループ
+        wait_count = 0
         while True:
+            wait_count += 1
+            if wait_count % 10 == 0:  # 30秒ごとに進捗を表示
+                print(f"⏰ 待機中... ({wait_count * 3}秒経過)")
+            
             if os.path.exists(setup_file):
                 print("✅ セットアップ完了を確認しました")
-                os.remove(setup_file)
+                try:
+                    os.remove(setup_file)
+                    print("✅ setup_done.txt ファイルを削除しました")
+                except Exception as e:
+                    print(f"⚠️  ファイル削除エラー: {e}")
                 break
+            
             await asyncio.sleep(3)
         
         print("✅ 手動準備完了！自動処理を開始します")
+        print("🔄 記事収集フェーズに移行します...")
     
     async def _scrape_articles(self, article_urls: List[str]) -> List[Dict]:
         """記事をスクレイピング"""

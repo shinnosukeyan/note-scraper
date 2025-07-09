@@ -60,7 +60,7 @@ class ContentFormatter:
             elif child.name == 'hr':
                 # 区切り線
                 parts.append('====')
-                parts.append('→')
+                parts.append('')
             
             elif child.name == 'img':
                 # 画像
@@ -120,7 +120,7 @@ class ContentFormatter:
                     if li_text:
                         prefix = '- ' if child.name == 'ul' else '1. '
                         parts.append(f"{prefix}{li_text}")
-                parts.append('→')
+                parts.append('')
         
         return parts
     
@@ -165,7 +165,10 @@ class ContentFormatter:
                 if other_text:
                     text_parts.append(other_text)
         
-        return ''.join(text_parts)
+        result = ''.join(text_parts)
+        # 「→」記号を除去
+        result = result.replace('→', '')
+        return result
     
     def _process_embed_content(self, div_element) -> str:
         """埋め込みコンテンツ・バナーを処理"""
