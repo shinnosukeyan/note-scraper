@@ -72,11 +72,21 @@ class IncrementalScraper:
         # ページに移動
         await self.browser_manager.navigate_to_article(url)
         
-        # タイトル取得
+        # タイトル取得（改良版）
         page_title = await self.browser_manager.get_page_title()
         title = ''
-        if page_title and '｜note' in page_title:
-            title = page_title.split('｜note')[0].strip()
+        if page_title:
+            # noteの様々なタイトル形式に対応
+            if '｜イケハヤ' in page_title:
+                title = page_title.split('｜イケハヤ')[0].strip()
+            elif '｜note' in page_title:
+                title = page_title.split('｜note')[0].strip()
+            elif '|note' in page_title:
+                title = page_title.split('|note')[0].strip()
+            elif ' - note' in page_title:
+                title = page_title.split(' - note')[0].strip()
+            else:
+                title = page_title.strip()
         
         # ページ内容を取得してパース
         content = await self.browser_manager.get_page_content()
@@ -135,11 +145,15 @@ class IncrementalScraper:
     
     async def get_all_article_urls_from_page(self, profile_url: str, 
                                            manual_setup: bool = True) -> List[str]:
-        """記事一覧ページから全記事URLを取得"""
+        """記事一覧ページから全記事URLを取得（外部でブラウザ管理される場合も対応）"""
         print(f"🌐 記事一覧からURL取得開始: {profile_url}")
         
+        # 外部でブラウザが既に初期化されている場合はそれを使用
+        browser_initialized_externally = self.browser_manager.page is not None
+        
         try:
-            await self.browser_manager.initialize()
+            if not browser_initialized_externally:
+                await self.browser_manager.initialize()
             
             # 記事一覧ページに移動
             article_list_url = await self.browser_manager.navigate_to_article_list(profile_url)
@@ -155,7 +169,9 @@ class IncrementalScraper:
             return article_urls
             
         finally:
-            await self.browser_manager.close()
+            # 外部でブラウザが管理されている場合は閉じない
+            if not browser_initialized_externally:
+                await self.browser_manager.close()
     
     async def _wait_for_manual_setup(self):
         """手動セットアップ待機"""
@@ -171,19 +187,38 @@ class IncrementalScraper:
         print()
         
         setup_file = "/Users/yusukeohata/Desktop/development/note-scraper/setup_done.txt"
+        
+        # 既存のファイルがあれば削除
+        if os.path.exists(setup_file):
+            os.remove(setup_file)
+            print("🗑️  前回のsetup_done.txtファイルを削除しました")
+        
         print("👆 完了したら、以下のコマンドを実行してください:")
         print(f"   touch {setup_file}")
         print()
         print("⏰ setup_done.txt ファイルの作成を待機中...")
+        print("   ※ このメッセージが表示されている間は、ファイルスクレイピングは開始されません")
         
+        # より確実な監視ループ
+        wait_count = 0
         while True:
+            wait_count += 1
+            if wait_count % 10 == 0:  # 30秒ごとに進捗を表示
+                print(f"⏰ 待機中... ({wait_count * 3}秒経過)")
+            
             if os.path.exists(setup_file):
                 print("✅ セットアップ完了を確認しました")
-                os.remove(setup_file)
+                try:
+                    os.remove(setup_file)
+                    print("✅ setup_done.txt ファイルを削除しました")
+                except Exception as e:
+                    print(f"⚠️  ファイル削除エラー: {e}")
                 break
+            
             await asyncio.sleep(3)
         
         print("✅ 手動準備完了！URL収集を開始します")
+        print("🔄 記事収集フェーズに移行します...")
     
     async def batch_scrape_with_progress(self, urls: List[str], batch_size: int = 5) -> List[Dict]:
         """バッチ処理で進捗表示付きスクレイピング"""

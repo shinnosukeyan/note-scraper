@@ -83,8 +83,15 @@ class CSVManager:
         # データをマージ
         merged_df = pd.concat([existing_df, new_df], ignore_index=True)
         
-        # 番号を再振り（重複防止）
-        merged_df['番号'] = range(1, len(merged_df) + 1)
+        # 公開日順でソート（昇順：古い順で番号付け）
+        merged_df_sorted = merged_df.sort_values('公開日', ascending=True)
+        
+        # 番号を再振り（最古記事=1番、最新記事=最大番号）
+        merged_df_sorted['番号'] = range(1, len(merged_df_sorted) + 1)
+        
+        # 表示用に降順ソート（最新記事が上に表示）
+        merged_df = merged_df_sorted.sort_values('公開日', ascending=False)
+        merged_df = merged_df.reset_index(drop=True)
         
         # 出力パス決定
         if output_path is None:
@@ -96,7 +103,7 @@ class CSVManager:
             output_path = f"output/{base_name}_updated_{timestamp}.csv"
         
         # 保存
-        merged_df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        merged_df.to_csv(output_path, index=False, encoding='utf-8-sig', quoting=1)
         
         # 結果情報
         file_size = os.path.getsize(output_path)

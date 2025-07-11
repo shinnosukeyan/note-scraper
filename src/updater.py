@@ -131,31 +131,76 @@ class NoteScrapeUpdater:
                                        manual_setup: bool = True,
                                        batch_size: int = 5,
                                        output_path: Optional[str] = None) -> Dict[str, any]:
-        """バッチ処理付きの増分更新"""
+        """バッチ処理付きの増分更新（単一ブラウザセッション）"""
         
         print("🚀 バッチ処理付き増分更新を開始します")
         
         try:
-            # ステップ1-3: 基本的な準備（新規URL取得まで）
+            # ステップ1: 既存データの読み込み
             existing_data = self.csv_manager.load_existing_csv(existing_csv_path)
             existing_urls = existing_data['stats']['existing_urls']
             
-            current_urls = await self.scraper.get_all_article_urls_from_page(
-                self.profile_url, manual_setup=manual_setup
-            )
+            # ステップ2: 単一ブラウザセッションで全処理を実行
+            await self.scraper.browser_manager.initialize()
             
-            new_urls = self.url_differ.calculate_new_urls(existing_urls, current_urls)
-            
-            # ステップ4: バッチ処理でスクレイピング
-            if new_urls:
-                new_articles = await self.scraper.batch_scrape_with_progress(
-                    new_urls, batch_size
+            try:
+                # 記事一覧からURL取得
+                current_urls = await self.scraper.get_all_article_urls_from_page(
+                    self.profile_url, manual_setup=manual_setup
                 )
-            else:
-                print("📝 新規記事がありません")
-                new_articles = []
+                
+                # 新規URL計算
+                new_urls = self.url_differ.calculate_new_urls(existing_urls, current_urls)
+                
+                # 新規記事のスクレイピング（同一ブラウザセッション内で実行）
+                if new_urls:
+                    print(f"\n📝 新規記事のスクレイピング開始: {len(new_urls)}件")
+                    new_articles = []
+                    
+                    # バッチ処理で新規記事を取得
+                    for batch_num in range(0, len(new_urls), batch_size):
+                        batch_urls = new_urls[batch_num:batch_num + batch_size]
+                        batch_index = batch_num // batch_size + 1
+                        total_batches = (len(new_urls) + batch_size - 1) // batch_size
+                        
+                        print(f"\n📦 バッチ {batch_index}/{total_batches} 処理中 ({len(batch_urls)}件)")
+                        
+                        for i, url in enumerate(batch_urls):
+                            global_index = batch_num + i + 1
+                            print(f"📄 記事 {global_index}/{len(new_urls)}: {url}")
+                            
+                            try:
+                                article = await self.scraper._scrape_single_article(url)
+                                new_articles.append(article)
+                                
+                                if article.get('title'):
+                                    print(f"✅ '{article['title'][:50]}...' を取得完了")
+                                
+                                await asyncio.sleep(1.5)
+                                
+                            except Exception as e:
+                                print(f"❌ エラー: {e}")
+                                new_articles.append({
+                                    'url': url,
+                                    'title': f"エラー: {e}",
+                                    'content': f"エラーが発生しました: {e}",
+                                    'date': '',
+                                    'price': '',
+                                    'purchase_status': ''
+                                })
+                        
+                        print(f"✅ バッチ {batch_index} 完了")
+                    
+                    print(f"🎉 全バッチ処理完了: {len(new_articles)}件")
+                else:
+                    print("📝 新規記事がありません")
+                    new_articles = []
+                
+            finally:
+                # ブラウザを確実に閉じる
+                await self.scraper.browser_manager.close()
             
-            # ステップ5: マージと保存
+            # ステップ3: マージと保存
             result = self.csv_manager.merge_and_save(
                 existing_csv_path, new_articles, output_path
             )

@@ -186,11 +186,25 @@ class NoteScraper:
                 # ページに移動
                 await self.browser_manager.navigate_to_article(url)
                 
-                # タイトル取得
+                # タイトル取得（デバッグ付き）
                 page_title = await self.browser_manager.get_page_title()
+                print(f"🔍 デバッグ - ページタイトル: '{page_title}'")
+                
                 title = ''
-                if page_title and '｜note' in page_title:
-                    title = page_title.split('｜note')[0].strip()
+                if page_title:
+                    # noteの様々なタイトル形式に対応
+                    if '｜イケハヤ' in page_title:
+                        title = page_title.split('｜イケハヤ')[0].strip()
+                    elif '｜note' in page_title:
+                        title = page_title.split('｜note')[0].strip()
+                    elif '|note' in page_title:
+                        title = page_title.split('|note')[0].strip()
+                    elif ' - note' in page_title:
+                        title = page_title.split(' - note')[0].strip()
+                    else:
+                        title = page_title.strip()
+                
+                print(f"🔍 デバッグ - 最終タイトル: '{title}'")
                 
                 # ページ内容を取得してパース
                 content = await self.browser_manager.get_page_content()
